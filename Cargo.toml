@@ -1,0 +1,6 @@
+[package]
+name = "googleprojection"
+version = "0.1.0"
+authors = ["Magnus Bergmark <magnus.bergmark@gmail.com>"]
+
+[dependencies]
