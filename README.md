@@ -8,7 +8,7 @@ It's a port of Go [code found in the `fawick/go-mapnik` project on GitHub][origi
 
 ## Usage
 
-Create a new `GoogleProjection` and use the implemented methods for it. `GoogleProjection` prefills a cache, so keep it around if you want to reuse the cache. It's completely immutable and safe to borrow everywhere at the same time.
+Import the `googleprojection` crate and use the public functions `from_ll_to_pixel` and `from_pixel_to_ll` on it. See API documentation and tests for more details.
 
 ## License
 
