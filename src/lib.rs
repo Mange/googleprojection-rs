@@ -1,3 +1,8 @@
+/// Struct containing the cached values to project coordinates. It is completely immutable.
+///
+/// The zoom level is between 0 and 29 inclusive, making 30 separate zoom levels.
+///
+/// The width and height per tile is assumed to be 256×256, just like Google Maps.
 pub struct GoogleProjection {
     bc: Vec<f64>,
     cc: Vec<f64>,
@@ -5,16 +10,26 @@ pub struct GoogleProjection {
     ac: Vec<f64>
 }
 
+/// A trait for everything that can be treated as a coordinate for a projection.
+///
+/// Implement this trait if you have a custom type to be able to project to and from it directly.
+///
+/// There exist an impl for this for `(f64, f64)` out of the box.
 pub trait Coord {
+    /// Return the first of the `f64` pair.
     fn x(&self) -> f64;
+
+    /// Return the second of the `f64` pair.
     fn y(&self) -> f64;
 
+    /// Construct a new Coord implementation from two `f64`.
     fn with_xy(f64, f64) -> Self;
 }
 
 const PI: f64 = std::f64::consts::PI;
 
 impl GoogleProjection {
+    /// Build cache for doing projections.
     pub fn new() -> GoogleProjection {
         let mut bc = Vec::with_capacity(30);
         let mut cc = Vec::with_capacity(30);
@@ -39,6 +54,19 @@ impl GoogleProjection {
         }
     }
 
+    /// Projects a given LL coordinate at a specific zoom level into pixel screen-coordinates.
+    ///
+    /// Zoom level is between 0 and 29 (inclusive). Every other zoom level will return a `None`.
+    ///
+    /// ```rust
+    /// use googleprojection::GoogleProjection;
+    ///
+    /// let projection = GoogleProjection::new();
+    /// let pixel = projection.from_ll_to_pixel(&(13.2, 55.9), 2).unwrap();
+    ///
+    /// assert_eq!(pixel.0, 550.0);
+    /// assert_eq!(pixel.1, 319.0);
+    /// ```
     pub fn from_ll_to_pixel<T: Coord>(&self, ll: &T, zoom: usize) -> Option<T> {
         if self.ac.len() > zoom {
             let d = self.zc[zoom];
@@ -51,6 +79,19 @@ impl GoogleProjection {
         }
     }
 
+    /// Projects a given pixel position at a specific zoom level into LL world-coordinates.
+    ///
+    /// Zoom level is between 0 and 29 (inclusive). Every other zoom level will return a `None`.
+    ///
+    /// ```rust
+    /// use googleprojection::GoogleProjection;
+    ///
+    /// let projection = GoogleProjection::new();
+    /// let ll = projection.from_pixel_to_ll(&(78.0, 78.0), 12).unwrap();
+    ///
+    /// assert!((ll.0 - -179.9732208251953).abs() < 1e-10);
+    /// assert!((ll.1 - 85.04881808980566).abs() < 1e-10);
+    /// ```
     pub fn from_pixel_to_ll<T: Coord>(&self, px: &T, zoom: usize) -> Option<T> {
         if self.ac.len() > zoom {
             let e = self.zc[zoom];
