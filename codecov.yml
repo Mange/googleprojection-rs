@@ -1,0 +1,13 @@
+# You can validate this file using this command:
+#   cat codecov.yml | curl --data-binary @- https://codecov.io/validate
+---
+comment: false
+coverage:
+  status:
+    patch:
+      default:
+        target: 80
+    project:
+      default:
+        target: 80
+    changes: false

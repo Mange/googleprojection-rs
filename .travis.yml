@@ -1,4 +1,17 @@
+sudo: required # For coverage script
 language: rust
+
+# Necessary for Codecov coverage information.
+addons:
+  apt:
+    packages:
+      - libcurl4-openssl-dev
+      - libelf-dev
+      - libdw-dev
+      - cmake
+      - gcc
+      - binutils-dev
+
 rust:
   - stable
   - beta
@@ -6,3 +19,43 @@ rust:
 matrix:
   allow_failures:
     - rust: nightly
+
+# load travis-cargo
+before_script:
+  - |
+      pip install 'travis-cargo<0.2' --user &&
+      export PATH=$HOME/.local/bin:$PATH
+
+# the main build
+script:
+  - |
+      travis-cargo build &&
+      travis-cargo test &&
+      travis-cargo bench &&
+      travis-cargo --only stable doc
+
+after_success:
+  # upload the documentation from the build with stable (automatically only actually
+  # runs on the master branch, not individual PRs)
+  - travis-cargo --only stable doc-upload
+  - |
+    wget https://github.com/SimonKagstrom/kcov/archive/master.tar.gz &&
+    tar xzf master.tar.gz &&
+    cd kcov-master &&
+    mkdir build &&
+    cd build &&
+    cmake .. &&
+    make &&
+    sudo make install &&
+    cd ../.. &&
+    rm -rf kcov-master &&
+    for file in target/debug/googleprojection-*; do mkdir -p "target/cov/$(basename $file)"; kcov --exclude-pattern=/.cargo,/usr/lib --verify "target/cov/$(basename $file)" "$file"; done &&
+    bash <(curl -s https://codecov.io/bash) &&
+    echo "Uploaded code coverage"
+
+env:
+  global:
+    # override the default `--features unstable` used for the nightly branch (optional)
+    - 'TRAVIS_CARGO_NIGHTLY_FEATURE=""'
+
+    - secure: EFJNRLO1I6yxG1agDjI0CZAMjBEbSrFVhzg4AvB702JZuv42NLLjSxOb7N0Izf9Hw2ZId5PkqhKEq8BH31OE2zr/95GtOC7CEHsPwoFUmLOW8SltA8DnNFCc9aOS4OXzQmyEMRJeAakfrLGfxSxeqXb4sO1MImuC5iDMJVW5THYtiXoG56Jyesppflq3fqsvAjM6zyPxYUcDOJKpcI3aN96pydOqvLFqKp1owvPiv0sPr+8YkTk+dDTvPnBBrtTpQIG76GP5YbEmy32eNwdOnxwrt2x28/oePlp0u/2milsJRa/VHK33KVntQTHSeVy3Jk6lXQxR3VqB68Lq1cNAK+Dj2lZ5tKkDS5IGBShrmOSfqKwPXwiXcV8xrmCpyOtsqUwztMMrcOpP5yo6KvLaqpaKrMpKZO3cBsVWTaHNeR1vXRM3Lj6Z2sOAV3Z9jOi0rkxGE+vMAfeTRGrkN+y+iXySf8CJ76yG+k0KC56LuEfzZyDP9b0rfTG5wz44kKHXN9hY2684KTZKlYtXcsECxpQJl9Zl1zOjoit2jfgknNgk5PojEOA3+V+6gi+VRKbFoqN2LYNwZPX/XWpfyAnBJAXi8P26t0FxSCLRpWci6DGRdYf2f1Hg4mjRPXdhb22P7QdeBaKKQMfeWa4f4vr2wipmIoYLBT7ZIVggsdWBq4Q=
