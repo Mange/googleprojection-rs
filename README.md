@@ -1,5 +1,7 @@
 # `googleprojection-rs`
 
+[![Build Status](https://travis-ci.org/Mange/googleprojection-rs.svg?branch=master)](https://travis-ci.org/Mange/googleprojection-rs)
+
 An implementation of "Google Projection" in Rust. It projects lat/long coordinates into screenspace pixels and back again for use when building a tileserver that works with Google Maps.
 
 It's a port of Go [code found in the `fawick/go-mapnik` project on GitHub][original-impl], in turn implemented from OpenStreetMap `generate_tiles.py`.
