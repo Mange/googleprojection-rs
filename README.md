@@ -10,7 +10,7 @@ Create a new `GoogleProjection` and use the implemented methods for it. `GoogleP
 
 ## License
 
-This code is released under Apache License 2.0.
+This code is released under Apache License 2.0. See `LICENSE` file.
 
 Based on `go-mapnik`, released under the MIT license.
 
