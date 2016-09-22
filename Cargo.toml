@@ -9,7 +9,7 @@ repository = "https://github.com/Mange/googleprojection-rs"
 
 readme = "README.md"
 
-keywords = ["geography", "projection", "google maps", "tile server"]
+keywords = ["geography", "geometry", "projection", "google-maps"]
 
 license = "Apache-2.0"
 
