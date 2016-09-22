@@ -3,4 +3,14 @@ name = "googleprojection"
 version = "1.0.0"
 authors = ["Magnus Bergmark <magnus.bergmark@gmail.com>"]
 
+description = "Project world- or screen-space coordinates for use in Google Maps tiles"
+documentation = "https://mange.github.io/googleprojection-rs/googleprojection/index.html"
+repository = "https://github.com/Mange/googleprojection-rs"
+
+readme = "README.md"
+
+keywords = ["geography", "projection", "google maps", "tile server"]
+
+license = "Apache-2.0"
+
 [dependencies]
