@@ -1,4 +1,4 @@
-const PI: f64 = std::f64::consts::PI;
+use std::f64::consts::PI;
 
 /// Projects a given LL coordinate at a specific zoom level into pixel screen-coordinates.
 ///
