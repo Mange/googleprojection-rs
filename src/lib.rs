@@ -1,6 +1,65 @@
 use std::f64::consts::PI;
 
-/// Projects a given LL coordinate at a specific zoom level into pixel screen-coordinates.
+pub struct Mercator {
+    tile_size: f64,
+}
+
+impl Mercator {
+    /// Create a new Mercator with custom tile size. Tile sizes must be a power of two (256, 512,
+    /// and so on).
+    pub fn with_size(tile_size: usize) -> Mercator {
+        Mercator { tile_size: tile_size as f64 }
+    }
+
+    /// Projects a given LL coordinate at a specific zoom level into pixel screen-coordinates.
+    ///
+    /// Zoom level is between 0 and 29 (inclusive). Every other zoom level will return a `None`.
+    pub fn from_ll_to_pixel<T: Coord>(&self, ll: &T, zoom: usize) -> Option<T> {
+        if 30 > zoom {
+            let c = self.tile_size * 2.0_f64.powi(zoom as i32);
+            let bc = c / 360.0;
+            let cc = c / (2.0 * PI);
+
+            let d = c / 2.0;
+            let e = ((d + ll.x() * bc) + 0.5).floor();
+            let f = ll.y().to_radians().sin().max(-0.9999).min(0.9999);
+            let g = ((d + 0.5 * ((1.0 + f) / (1.0 - f)).ln() * -cc) + 0.5).floor();
+
+            Some(T::with_xy(e, g))
+        } else {
+            None
+        }
+    }
+
+    /// Projects a given pixel position at a specific zoom level into LL world-coordinates.
+    ///
+    /// Zoom level is between 0 and 29 (inclusive). Every other zoom level will return a `None`.
+    pub fn from_pixel_to_ll<T: Coord>(&self, px: &T, zoom: usize) -> Option<T> {
+        if 30 > zoom {
+            let c = self.tile_size * 2.0_f64.powi(zoom as i32);
+            let bc = c / 360.0;
+            let cc = c / (2.0 * PI);
+
+            let e = c / 2.0;
+            let f = (px.x() - e) / bc;
+            let g = (px.y() - e) / -cc;
+            let h = (2.0 * g.exp().atan() - 0.5 * PI).to_degrees();
+
+            Some(T::with_xy(f, h))
+        } else {
+            None
+        }
+    }
+}
+
+impl Default for Mercator {
+    fn default() -> Mercator {
+        Mercator { tile_size: 256.0 }
+    }
+}
+
+/// Projects a given LL coordinate at a specific zoom level into pixel screen-coordinates using a
+/// default tile size of 256.
 ///
 /// Zoom level is between 0 and 29 (inclusive). Every other zoom level will return a `None`.
 ///
@@ -13,23 +72,11 @@ use std::f64::consts::PI;
 /// assert_eq!(pixel.1, 319.0);
 /// ```
 pub fn from_ll_to_pixel<T: Coord>(ll: &T, zoom: usize) -> Option<T> {
-    if 30 > zoom {
-        let c = 256.0 * 2.0_f64.powi(zoom as i32);
-        let bc = c / 360.0;
-        let cc = c / (2.0 * PI);
-
-        let d = c / 2.0;
-        let e = ((d + ll.x() * bc) + 0.5).floor();
-        let f = ll.y().to_radians().sin().max(-0.9999).min(0.9999);
-        let g = ((d + 0.5 * ((1.0 + f) / (1.0 - f)).ln() * -cc) + 0.5).floor();
-
-        Some(T::with_xy(e, g))
-    } else {
-        None
-    }
+    Mercator::with_size(256).from_ll_to_pixel(&ll, zoom)
 }
 
-/// Projects a given pixel position at a specific zoom level into LL world-coordinates.
+/// Projects a given pixel position at a specific zoom level into LL world-coordinates using a
+/// default tile size of 256.
 ///
 /// Zoom level is between 0 and 29 (inclusive). Every other zoom level will return a `None`.
 ///
@@ -42,27 +89,15 @@ pub fn from_ll_to_pixel<T: Coord>(ll: &T, zoom: usize) -> Option<T> {
 /// assert!((ll.1 - 85.04881808980566).abs() < 1e-10);
 /// ```
 pub fn from_pixel_to_ll<T: Coord>(px: &T, zoom: usize) -> Option<T> {
-    if 30 > zoom {
-        let c = 256.0 * 2.0_f64.powi(zoom as i32);
-        let bc = c / 360.0;
-        let cc = c / (2.0 * PI);
-
-        let e = c / 2.0;
-        let f = (px.x() - e) / bc;
-        let g = (px.y() - e) / -cc;
-        let h = (2.0 * g.exp().atan() - 0.5 * PI).to_degrees();
-
-        Some(T::with_xy(f, h))
-    } else {
-        None
-    }
+    Mercator::with_size(256).from_pixel_to_ll(&px, zoom)
 }
 
 /// A trait for everything that can be treated as a coordinate for a projection.
 ///
 /// Implement this trait if you have a custom type to be able to project to and from it directly.
 ///
-/// There exist an impl for this for `(f64, f64)` out of the box.
+/// There exist an impl for this for `(f64, f64)` out of the box (formatted as `(x, y)`, or `(lon,
+/// lat)`).
 pub trait Coord {
     /// Return the first of the `f64` pair.
     fn x(&self) -> f64;
@@ -173,5 +208,23 @@ mod test {
         assert_eq!(super::from_ll_to_pixel(&(0.0, 0.0), 30), None);
 
         assert_eq!(super::from_pixel_to_ll(&(0.0, 0.0), 30), None);
+    }
+
+    #[test]
+    fn it_projects_with_custom_size() {
+        use super::Mercator;
+        let mercator = Mercator::with_size(512);
+
+        let ll = mercator.from_pixel_to_ll(&(512.0, 512.0), 1).unwrap();
+        assert!(ll == (0.0, 0.0),
+                format!("Pixels 512,512 is on LL 0,0 on zoom 1 on a mercator with 512 pixels \
+                         per tile, but got result: {:?}",
+                        ll));
+
+        let px = mercator.from_ll_to_pixel(&(0.0, 0.0), 1).unwrap();
+        assert!(px == (512.0, 512.0),
+                format!("LL 0,0 is on pixels 512,512 on zoom 1 on a mercator with 512 pixels \
+                         per tile, but got result: {:?}",
+                        px));
     }
 }
