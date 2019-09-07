@@ -11,23 +11,37 @@ impl Mercator {
         Mercator { tile_size: tile_size as f64 }
     }
 
-    /// Projects a given LL coordinate at a specific zoom level into pixel screen-coordinates.
+    /// Projects a given LL coordinate at a specific zoom level into decimal sub-pixel screen-coordinates.
     ///
     /// Zoom level is between 0 and 29 (inclusive). Every other zoom level will return a `None`.
-    pub fn from_ll_to_pixel<T: Coord>(&self, ll: &T, zoom: usize) -> Option<T> {
+    pub fn from_ll_to_subpixel<T: Coord>(&self, ll: &T, zoom: usize) -> Option<T> {
         if 30 > zoom {
             let c = self.tile_size * 2.0_f64.powi(zoom as i32);
             let bc = c / 360.0;
             let cc = c / (2.0 * PI);
 
             let d = c / 2.0;
-            let e = ((d + ll.x() * bc) + 0.5).floor();
+            let e = d + ll.x() * bc;
             let f = ll.y().to_radians().sin().max(-0.9999).min(0.9999);
-            let g = ((d + 0.5 * ((1.0 + f) / (1.0 - f)).ln() * -cc) + 0.5).floor();
+            let g = d + 0.5 * ((1.0 + f) / (1.0 - f)).ln() * -cc;
 
             Some(T::with_xy(e, g))
         } else {
             None
+        }
+    }
+
+
+    /// Projects a given LL coordinate at a specific zoom level into integer pixel screen-coordinates.
+    ///
+    /// Zoom level is between 0 and 29 (inclusive). Every other zoom level will return a `None`.
+    pub fn from_ll_to_pixel<T: Coord>(&self, ll: &T, zoom: usize) -> Option<T> {
+        match self.from_ll_to_subpixel(ll, zoom) {
+            Some(subpixel) => Some(T::with_xy(
+                (subpixel.x() + 0.5).floor(),
+                (subpixel.y() + 0.5).floor()
+            )),
+            None => None
         }
     }
 
@@ -56,6 +70,23 @@ impl Default for Mercator {
     fn default() -> Mercator {
         Mercator { tile_size: 256.0 }
     }
+}
+
+/// Projects a given LL coordinate at a specific zoom level into decimal pixel screen-coordinates using a
+/// default tile size of 256.
+///
+/// Zoom level is between 0 and 29 (inclusive). Every other zoom level will return a `None`.
+///
+/// ```rust
+/// extern crate googleprojection;
+///
+/// let subpixel = googleprojection::from_ll_to_subpixel(&(13.2, 55.9), 2).unwrap();
+///
+/// assert!((subpixel.0 - 549.5466666666666).abs() < 1e-10);
+/// assert!((subpixel.1 - 319.3747774937304).abs() < 1e-10);
+/// ```
+pub fn from_ll_to_subpixel<T: Coord>(ll: &T, zoom: usize) -> Option<T> {
+    Mercator::with_size(256).from_ll_to_subpixel(&ll, zoom)
 }
 
 /// Projects a given LL coordinate at a specific zoom level into pixel screen-coordinates using a
@@ -137,6 +168,83 @@ mod test {
         let coord: (f64, f64) = Coord::with_xy(45.0, 33.0);
         assert_eq!(coord.x(), 45.0);
         assert_eq!(coord.y(), 33.0);
+    }
+
+    #[test]
+    fn it_matches_google_maps_projection_extension() {
+        let pixel_extension = 60.0;
+        let starting_coord = (43.6532, -79.3832);
+
+        // These data collected using Google Maps API OverlayView.getProjection().fromLatLngToDivPixel(), 
+        // adding 60 to x, subtracting 60 from y, then converting back using OverlayView.getProjection().fromDivPixelToLatLng()
+        let answers = vec![
+            // ((lat, lng), zoom)
+            ((50.800061065188856, -68.83632499999999),  3),
+            ((47.34741387849921,  -74.10976249999999),  4),
+            ((45.530626397270055, -76.74648124999999),  5),
+            ((44.599495541698985, -78.06484062499999),  6),
+            ((44.12824279122392,  -78.72402031249999),  7),
+            ((43.891195023324286, -79.05361015624999),  8),
+            ((43.77231589906095,  -79.21840507812499),  9),
+            ((43.712787543711634, -79.30080253906249), 10),
+            ((43.68300117005328,  -79.34200126953124), 11),
+            ((43.66810243453164,  -79.36260063476561), 12),
+            ((43.66065167963645,  -79.3729003173828),  13),
+            ((43.65692595541019,  -79.3780501586914),  14),
+            ((43.65506300660299,  -79.38062507934569), 15),
+            ((43.65413151052596,  -79.38191253967284), 16),
+            ((43.653665757069085, -79.38255626983641), 17),
+            ((43.653432878986074, -79.3828781349182),  18),
+            ((43.6533164396059,   -79.3830390674591),  19),
+        ];
+
+        for answer in answers {
+            let expected_ll = answer.0;
+            let expected = (expected_ll.1, expected_ll.0);
+            let zoom = answer.1;
+
+            let subpixel = super::from_ll_to_subpixel(&(starting_coord.1, starting_coord.0), zoom).unwrap();
+            let actual = super::from_pixel_to_ll(&(subpixel.0 + pixel_extension, subpixel.1 - pixel_extension), zoom).unwrap();
+
+            assert!(float_pair_close(&actual, &expected),
+                    format!("Expected {:?} at zoom {} to be {:?} but was {:?}",
+                            &starting_coord,
+                            zoom,
+                            &expected,
+                            &actual));
+        }
+    }
+
+    #[test]
+    fn it_projects_to_subpixels() {
+        let answers = vec![((0.0, 0.0), 0, (128.0, 128.0)),
+                           ((0.0, 0.0), 1, (256.0, 256.0)),
+                           ((0.0, 0.0), 29, (6.8719476736e10, 6.8719476736e10)),
+
+                           ((0.0, 1.0), 0, (128.0, 127.2888527833)),
+                           ((1.0, 0.0), 0, (128.7111111111, 128.0)),
+                           ((1.0, 1.0), 0, (128.7111111111, 127.2888527833)),
+
+                           ((5.5, 5.5), 5, (4221.1555555555, 3970.6517891289)),
+
+                           ((100.0, 54.0), 12, (815559.1111111111, 336678.5009166745)),
+
+                           ((-45.0, 12.0), 6, (6144.0, 7641.8296348480))];
+
+        for answer in answers {
+            let ll = answer.0;
+            let zoom = answer.1;
+            let expected = answer.2;
+
+            let actual = super::from_ll_to_subpixel(&ll, zoom).unwrap();
+
+            assert!(float_pair_close(&actual, &expected),
+                    format!("Expected {:?} at zoom {} to be {:?} but was {:?}",
+                            &ll,
+                            zoom,
+                            &expected,
+                            &actual));
+        }
     }
 
     #[test]
